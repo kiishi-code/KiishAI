@@ -39,7 +39,6 @@
     async function checkAuthentication() {
       const { data: { user } } = await supabaseClient.auth.getUser();
       if (!user) {
-        // Fallback redirection out to the file path to prevent route reload loops
         window.location.href = "/static/login.html"; 
       } else {
         userName = user.user_metadata.full_name || user.user_metadata.name || "Friend";
@@ -88,7 +87,7 @@
   </div>
 
   <script>
-    // Pull context from hard drive on startup or default empty
+    // Pull context from localStorage on startup or default empty
     let history = JSON.parse(localStorage.getItem('kiishi_chat_history')) || [];
 
     // Redraw persistent bubbles instantly on browser reload
@@ -119,7 +118,6 @@
     }
 
     async function handleLogout() {
-      // Clean local machine cache securely on exit
       localStorage.removeItem('kiishi_chat_history');
       await supabaseClient.auth.signOut();
       window.location.href = "/";
@@ -159,6 +157,9 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let aiResponse = '';
+        let isFirstChunk = true;
+
+        const bubbleContainer = aiDiv.querySelector('.chat-bubble-ai');
 
         while (true) {
           const { value, done } = await reader.read();
@@ -168,10 +169,17 @@
           const lines = text.split('\n');
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.trim().startsWith('data: ')) {
               const chunk = line.slice(6);
+              
+              // Wipe out the 'thinking...' status container on the first valid incoming line text chunk
+              if (isFirstChunk) {
+                bubbleContainer.innerHTML = '';
+                isFirstChunk = false;
+              }
+              
               aiResponse += chunk;
-              aiDiv.querySelector('.chat-bubble-ai').innerHTML = aiResponse || 'Thinking...';
+              bubbleContainer.innerText = aiResponse; 
               chat.scrollTop = chat.scrollHeight;
             }
           }
@@ -185,7 +193,7 @@
         localStorage.setItem('kiishi_chat_history', JSON.stringify(history));
 
       } catch (error) {
-        aiDiv.querySelector('.chat-bubble-ai').innerHTML = "Sorry, I couldn't connect. Please check your system connection setup.";
+        bubbleContainer.innerHTML = "Sorry, I couldn't connect. Please check your system connection setup.";
       }
     }
   </script>
