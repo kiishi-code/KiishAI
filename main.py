@@ -10,8 +10,17 @@ from typing import List, Dict, Any
 # ====================== CONFIG ======================
 # ⚠️ SECURITY: Do NOT hardcode API keys in production!
 # Use environment variables instead:
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
+import os
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
+
+# ====================== CONFIG ======================
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+if not OPENROUTER_API_KEY:
+    raise ValueError("❌ OPENROUTER_API_KEY is not set in .env file!")
 app = FastAPI(title="KiishiAI")
 
 # Serve static files (HTML, CSS, JS)
