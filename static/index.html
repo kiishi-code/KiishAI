@@ -86,116 +86,132 @@
     </div>
   </div>
 
-  <script>
-    // Pull context from localStorage on startup or default empty
-    let history = JSON.parse(localStorage.getItem('kiishi_chat_history')) || [];
+<script>
+  // Pull context from localStorage on startup or default empty
+  let history = JSON.parse(localStorage.getItem('kiishi_chat_history')) || [];
 
-    // Redraw persistent bubbles instantly on browser reload
-    window.addEventListener('DOMContentLoaded', () => {
-      if (history.length > 0) {
-        history.forEach(msg => {
-          const isUser = msg.role === "user";
-          const text = msg.parts && msg.parts[0] ? msg.parts[0].text : msg.content;
-          if (text) {
-            addMessage(text, isUser);
-          }
-        });
-      }
-    });
-
-    function addMessage(text, isUser) {
-      const chat = document.getElementById('chat');
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
-      
-      messageDiv.innerHTML = `
-        <div class="${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'} max-w-[85%] px-6 py-4 text-[17px] leading-relaxed shadow-md">
-          ${text}
-        </div>
-      `;
-      chat.appendChild(messageDiv);
-      chat.scrollTop = chat.scrollHeight;
+  // Redraw persistent bubbles instantly on browser reload
+  window.addEventListener('DOMContentLoaded', () => {
+    if (history.length > 0) {
+      history.forEach(msg => {
+        const isUser = msg.role === "user";
+        const text = msg.parts && msg.parts[0] ? msg.parts[0].text : msg.content;
+        if (text) {
+          addMessage(text, isUser);
+        }
+      });
     }
+  });
 
-    async function handleLogout() {
-      localStorage.removeItem('kiishi_chat_history');
-      await supabaseClient.auth.signOut();
-      window.location.href = "/";
-    }
+  function addMessage(text, isUser) {
+    const chat = document.getElementById('chat');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+    
+    messageDiv.innerHTML = `
+      <div class="${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'} max-w-[85%] px-6 py-4 text-[17px] leading-relaxed shadow-md whitespace-pre-wrap">
+        ${text}
+      </div>
+    `;
+    chat.appendChild(messageDiv);
+    chat.scrollTop = chat.scrollHeight;
+  }
 
-    async function sendMessage() {
-      const input = document.getElementById('userInput');
-      const message = input.value.trim();
-      
-      if (!message) return;
+  async function handleLogout() {
+    localStorage.removeItem('kiishi_chat_history');
+    await supabaseClient.auth.signOut();
+    window.location.href = "/";
+  }
 
-      addMessage(message, true);
-      input.value = '';
+  async function sendMessage() {
+    const input = document.getElementById('userInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
 
-      const chat = document.getElementById('chat');
-      const aiDiv = document.createElement('div');
-      aiDiv.className = 'flex justify-start';
-      aiDiv.innerHTML = `
-        <div class="chat-bubble-ai max-w-[85%] px-6 py-4 shadow-md">
-          <span class="typing">KiishiAI is thinking<span class="dots">...</span></span>
-        </div>
-      `;
-      chat.appendChild(aiDiv);
-      chat.scrollTop = chat.scrollHeight;
+    addMessage(message, true);
+    input.value = '';
 
-      try {
-        const response = await fetch('/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message: message, 
-            history: history,
-            user_name: userName 
-          })
-        });
+    const chat = document.getElementById('chat');
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'flex justify-start';
+    aiDiv.innerHTML = `
+      <div class="chat-bubble-ai max-w-[85%] px-6 py-4 shadow-md">
+        <span class="typing">KiishiAI is thinking<span class="dots">...</span></span>
+      </div>
+    `;
+    chat.appendChild(aiDiv);
+    chat.scrollTop = chat.scrollHeight;
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let aiResponse = '';
-        let isFirstChunk = true;
+    const bubbleContainer = aiDiv.querySelector('.chat-bubble-ai');
 
-        const bubbleContainer = aiDiv.querySelector('.chat-bubble-ai');
+    try {
+      const response = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          message: message, 
+          history: history,
+          user_name: userName 
+        })
+      });
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
+      if (!response.ok) throw new Error("Server error");
 
-          const text = decoder.decode(value);
-          const lines = text.split('\n');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+      let isFirstChunk = true;
+      let streamBuffer = ''; // Holds fragmented text pieces
 
-          for (const line of lines) {
-            if (line.trim().startsWith('data: ')) {
-              const chunk = line.slice(6);
-              
-              // Wipe out the 'thinking...' status container on the first valid incoming line text chunk
-              if (isFirstChunk) {
-                bubbleContainer.innerHTML = '';
-                isFirstChunk = false;
-              }
-              
-              aiResponse += chunk;
-              bubbleContainer.innerText = aiResponse; 
-              chat.scrollTop = chat.scrollHeight;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        // Append new network data to our buffer stream
+        streamBuffer += decoder.decode(value, { stream: true });
+        
+        // Split data cleanly by lines
+        const lines = streamBuffer.split('\n');
+        
+        // Save the last line back into the buffer because it might be incomplete!
+        streamBuffer = lines.pop();
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('data: ')) {
+            const chunk = trimmedLine.slice(6);
+            
+            if (isFirstChunk) {
+              bubbleContainer.innerHTML = '';
+              isFirstChunk = false;
             }
+            
+            aiResponse += chunk;
+            bubbleContainer.innerText = aiResponse; 
+            chat.scrollTop = chat.scrollHeight;
           }
         }
-
-        // Commit strings sequentially to list instance
-        history.push({ role: "user", parts: [{ text: message }] });
-        history.push({ role: "model", parts: [{ text: aiResponse }] });
-
-        // Save layout string straight to storage drive memory
-        localStorage.setItem('kiishi_chat_history', JSON.stringify(history));
-
-      } catch (error) {
-        bubbleContainer.innerHTML = "Sorry, I couldn't connect. Please check your system connection setup.";
       }
+
+      // Check if anything remains in the buffer after stream closure
+      if (streamBuffer.trim().startsWith('data: ')) {
+        const chunk = streamBuffer.trim().slice(6);
+        if (isFirstChunk) bubbleContainer.innerHTML = '';
+        aiResponse += chunk;
+        bubbleContainer.innerText = aiResponse;
+      }
+
+      // Save to memory history after successful completion
+      history.push({ role: "user", parts: [{ text: message }] });
+      history.push({ role: "model", parts: [{ text: aiResponse }] });
+      localStorage.setItem('kiishi_chat_history', JSON.stringify(history));
+
+    } catch (error) {
+      console.error(error);
+      bubbleContainer.innerHTML = "Sorry, I couldn't connect. Please check your system connection setup.";
     }
-  </script>
+  }
+</script>
 </body>
 </html>
