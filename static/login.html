@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login to KiishiAI</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"/>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center text-white font-sans">
+  <div class="bg-slate-800 p-8 rounded-2xl shadow-xl w-full max-w-md text-center border border-slate-700">
+    <h1 class="text-3xl font-extrabold tracking-tight mb-2 text-blue-500">KiishiAI</h1>
+    <p class="text-slate-400 mb-8">Please log in to continue chatting</p>
+    
+    <div class="space-y-4">
+      <button onclick="signIn('google')" class="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-700 py-3 px-4 rounded-xl font-medium transition-all cursor-pointer shadow-lg">
+        <i class="fab fa-google text-lg"></i> Sign in with Google
+      </button>
+      <button onclick="signIn('facebook')" class="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 py-3 px-4 rounded-xl font-medium transition-all cursor-pointer shadow-lg">
+        <i class="fab fa-facebook text-lg"></i> Sign in with Facebook
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://uwryzqcfirywtmpjbuwy.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3cnl6cWNmaXJ5d3RtcGpidXd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxNDE1NDgsImV4cCI6MjA5NzcxNzU0OH0.bZxDrPuXnV4wmpOofQdeLumrZT-HR83cziOdmlLP7c8";
+    
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function signIn(provider) {
+      await supabaseClient.auth.signInWithOAuth({
+        provider: provider,
+        options: { 
+          // Instructs OAuth providers to redirect right back to your home layout base domain URL
+          redirectTo: window.location.origin + '/' 
+        }
+      });
+    }
+  </script>
+</body>
+</html>
