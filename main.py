@@ -125,6 +125,7 @@ async def home():
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
+    # System instructions
     personalized_prompt = f"""
     You are KiishiAI, a friendly, intelligent, and helpful AI assistant.
     The user you are chatting with is named {request.user_name}. 
@@ -151,12 +152,16 @@ async def chat(request: ChatRequest):
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            # FIXED: OpenRouter requires these 2 headers when using routing endpoints like openrouter/free
+            "HTTP-Referer": "https://render.com", 
+            "X-Title": "KiishiAI"
         }
         payload = {
             "model": "openrouter/free", 
             "messages": messages,
-            "stream": True
+            "stream": True,
+            "temperature": 0.7
         }
         
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -170,23 +175,24 @@ async def chat(request: ChatRequest):
                                 break
                             try:
                                 data_json = json.loads(data_str)
-                                delta = data_json['choices'][0]['delta']
-                                if 'content' in delta:
-                                    yield f"data: {delta['content']}\n\n"
+                                # Safeguard against missing array indices or text deltas
+                                if 'choices' in data_json and len(data_json['choices']) > 0:
+                                    delta = data_json['choices'][0].get('delta', {})
+                                    if 'content' in delta:
+                                        yield f"data: {delta['content']}\n\n"
                             except Exception:
                                 continue
 
-    # FIX: Add headers instructing proxies (like Render's Nginx layer) not to buffer this data
     return StreamingResponse(
         stream_response(), 
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no", # Strictly tells Nginx to bypass response buffering
+            "X-Accel-Buffering": "no",
             "Connection": "keep-alive"
         }
     )
-        # Non-blocking high-performance streaming connection
+    # Non-blocking high-performance streaming connection
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as response:
                 async for line in response.aiter_lines():
