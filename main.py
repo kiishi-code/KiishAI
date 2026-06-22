@@ -1,3 +1,32 @@
+import os
+import json
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import httpx
+
+# Live production config key
+OPENROUTER_API_KEY = "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"
+
+app = FastAPI(title="KiishiAI")
+
+# Serve UI static assets
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list = []
+    user_name: str = "User"
+
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    """
+    Serves the chat workspace UI on the root URL.
+    """
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return f.read()
+
 @app.post("/chat")
 async def chat(request: ChatRequest):
     personalized_prompt = f"""
@@ -61,3 +90,22 @@ async def chat(request: ChatRequest):
             "Connection": "keep-alive"
         }
     )
+        # Non-blocking high-performance streaming connection
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as response:
+                async for line in response.aiter_lines():
+                    if line:
+                        line = line.strip()
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                data_json = json.loads(data_str)
+                                delta = data_json['choices'][0]['delta']
+                                if 'content' in delta:
+                                    yield f"data: {delta['content']}\n\n"
+                            except Exception:
+                                continue
+
+    return StreamingResponse(stream_response(), media_type="text/event-stream")
