@@ -33,7 +33,6 @@
       await supabaseClient.auth.signInWithOAuth({
         provider: provider,
         options: { 
-          // Instructs OAuth providers to redirect right back to your home layout base domain URL
           redirectTo: window.location.origin + '/' 
         }
       });
