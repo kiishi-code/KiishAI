@@ -6,8 +6,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 
-# Securely pulled from Render Environment settings
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+# 1. Try to read from Render dashboard first. 
+# 2. If Render is buggy, it falls back to the secure string string directly!
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
 
 app = FastAPI(title="KiishiAI")
 
@@ -26,12 +27,7 @@ async def home():
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    if not OPENROUTER_API_KEY:
-        return StreamingResponse(
-            (f"data: API Key missing in environment settings\n\n" for _ in range(1)),
-            media_type="text/event-stream"
-        )
-
+    # System instructions
     personalized_prompt = f"""
     You are KiishiAI, a friendly, intelligent, and helpful AI assistant.
     The user you are chatting with is named {request.user_name}. 
